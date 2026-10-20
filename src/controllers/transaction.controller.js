@@ -222,6 +222,15 @@ async function createInitialFundsTransaction(req, res) {
     })
 
     if (!toUserAccount) {
+        const accountOwnedByUser = await accountModel.findOne({ user: toAccount })
+
+        if (accountOwnedByUser) {
+            return res.status(400).json({
+                message: "toAccount must be the account _id from POST /api/accounts, not the user _id",
+                accountId: accountOwnedByUser._id
+            })
+        }
+
         return res.status(400).json({
             message: "Invalid toAccount"
         })
@@ -239,7 +248,13 @@ async function createInitialFundsTransaction(req, res) {
 
     if (!fromUserAccount) {
         return res.status(400).json({
-            message: "System user account not found"
+            message: "System user account not found. Login as the system user and POST /api/accounts/ first."
+        })
+    }
+
+    if (String(fromUserAccount._id) === String(toUserAccount._id)) {
+        return res.status(400).json({
+            message: "System account and toAccount cannot be the same. Credit a user account, not the system account."
         })
     }
 
@@ -280,9 +295,11 @@ async function createInitialFundsTransaction(req, res) {
         })
     } catch (error) {
         await session.abortTransaction()
+        console.error("Initial funds transaction failed:", error)
 
         return res.status(500).json({
-            message: "Initial funds transaction failed, please retry after sometime"
+            message: "Initial funds transaction failed, please retry after sometime",
+            error: error.message
         })
     } finally {
         session.endSession()
